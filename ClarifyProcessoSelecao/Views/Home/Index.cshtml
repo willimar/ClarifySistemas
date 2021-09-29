@@ -1,0 +1,191 @@
+﻿@using ClimaTempo.Core.Enums;
+@using ClimaTempo.Core.Extensions;
+@using System.Globalization;
+@using ClimaTempo.Application.Models;
+
+@{
+    ViewBag.Title = "Home Page";
+
+    var maximas = ViewBag.MaisQuentes as ICollection<TemperaturaCidade>;
+    var minimas = ViewBag.MaisFrias as ICollection<TemperaturaCidade>;
+
+    var culture = CultureInfo.CreateSpecificCulture("pt-BR");
+}
+
+<div class="jumbotron">
+    <h1>Clima tempo simples</h1>
+    <p class="lead">O sistema é parte do processo seletivo da emrpesa Clarify Sistemas e como tal NÃO possui licença livre para reprodução ou utilização parcial ou completa de seu código.</p>
+    <p><a href="https://github.com/willimar/ClarifySistemas/blob/main/LICENSE" class="btn btn-primary btn-lg">Learn more &raquo;</a></p>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="panel panel-primary">
+            <div class="panel-heading">
+                <h3 class="panel-title">Cidades mais quentes hoje</h3>
+            </div>
+            <div class="panel-body">
+                @foreach (var cidade in maximas.OrderByDescending(x => x.Maxima).OrderBy(x => x.Cidade).OrderBy(x => x.Estado))
+                {
+                    <div class="row">
+                        <div class="col-md-8">
+                            @cidade.Cidade/@cidade.Estado
+                        </div>
+                        <div class="col-md-2">
+                            Min @cidade.Minima°C
+                        </div>
+                        <div class="col-md-2">
+                            Máx @cidade.Maxima°C
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="panel panel-primary">
+            <div class="panel-heading">
+                <h3 class="panel-title">Cidades mais frias hoje</h3>
+            </div>
+            <div class="panel-body">
+                @foreach (var cidade in minimas?.OrderBy(x => x.Maxima).OrderBy(x => x.Cidade).OrderBy(x => x.Estado))
+                {
+                    <div class="row">
+                        <div class="col-md-8">
+                            @cidade.Cidade/@cidade.Estado
+                        </div>
+                        <div class="col-md-2">
+                            Min @cidade.Minima°C
+                        </div>
+                        <div class="col-md-2">
+                            Máx @cidade.Maxima°C
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-8">
+    </div>
+    <div class="col-md-4">
+        <label for="txt-nome-cidade">Cidade:</label>
+        <select id="txt-nome-cidade" class="cidades form-control"></select>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12 text-center" style="display: none;" id="nome-cidade-info">
+        <h2>
+            Clima para os próximos <span id="qtd-dias">sete</span> dias na cidade de <span id="nome-cidade"></span>
+        </h2>
+    </div>
+</div>
+
+<div class="row center-block previsoes">
+    @for (int i = 1; i < 8; i++)
+    {
+        <div id="card-dia-@i" class="col-md-1 col-sm-1" style="min-width: 155px; display: none;">
+            <div style="min-width: 150px;">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        <h1 class="panel-title" id="title-@i"></h1>
+                    </div>
+                    <div class="panel-body text-left">
+                        <div><i class="fa fa-2x" id="tempo-icon-@i"></i> <span id="tempo-name-@i"></span></div>
+                        <div>Mínima: <span id="minima-@i"></span>°C</div>
+                        <div>Máxima: <span id="maxima-@i"></span>°C</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+</div>
+
+<script>
+
+    $(".cidades").select2({
+        multiple: false,
+        placeholder: "Digite o nome da cidade para pesquisar...",
+        allowClear: true,
+        width: "100%",
+        cache: true,
+        ajax: {
+            url: '/Home/GetCidades',
+            dataType: 'json',
+            width: 'resolve',
+            data: function (params) {
+                return {
+                    query: params.term,
+                    page: params.page
+                };
+            },
+            processResults: function (data) {
+                var newData = [];
+                $.each(data.items, function (index, item) {
+                    newData.push({
+                        id: item.Id,
+                        text: item.Text
+                    });
+                });
+                return { results: newData };
+            },
+
+        }
+    });
+
+    $(".cidades").on('select2:select', function (evt) {
+        var cidadeId = $(".cidades").select2('data')[0].id;
+
+        $.ajax({
+            method: "GET",
+            url: '/Home/GetPrevisao?cidadeId=' + cidadeId,
+        }).done(function (data) {
+            var nomeCidade = data.result.NomeCidade;
+            var previsoes = data.result.Previsoes;
+
+            $("#nome-cidade").html(nomeCidade);
+
+            if (nomeCidade) {
+                $("#nome-cidade-info").show();
+            }
+            else {
+                $("#nome-cidade-info").hide();
+            }
+
+            for (var i = 1; i < 8; i++) {
+                var flag = i;
+                var card = $("#card-dia-" + flag);
+
+                card.hide();
+            }
+
+            for (var i = 0; i < previsoes.length; i++) {
+                var previsao = previsoes[i];
+                var flag = i + 1;
+
+                var title = $("#title-" + flag);
+                var icon = $("#tempo-icon-" + flag);
+                var tempoName = $("#tempo-name-" + flag);
+                var minima = $("#minima-" + flag);
+                var maxima = $("#maxima-" + flag);
+                var card = $("#card-dia-" + flag);
+
+                title.html(previsao.DiaSemana);
+
+                icon.removeAttr('class');
+                icon.attr('class', '');
+                icon.addClass("fa fa-2x " + previsao.Icon);
+
+                tempoName.html(previsao.CondicaoNome);
+                minima.html(previsao.Minima);
+                maxima.html(previsao.Maxima);
+
+                card.show();
+            }
+        });
+
+    });
+</script>
